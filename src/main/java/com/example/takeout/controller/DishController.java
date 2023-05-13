@@ -1,8 +1,11 @@
 package com.example.takeout.controller;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.TypeReference;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.example.takeout.common.CustomException;
 import com.example.takeout.common.Result;
 import com.example.takeout.dto.DishDto;
 import com.example.takeout.entity.Category;
@@ -11,16 +14,19 @@ import com.example.takeout.entity.DishFlavor;
 import com.example.takeout.service.CategoryService;
 import com.example.takeout.service.DishFlavorService;
 import com.example.takeout.service.DishService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/dish")
+@Slf4j
 public class DishController {
     @Resource
     private DishService dishService;
@@ -31,10 +37,15 @@ public class DishController {
     @Resource
     private CategoryService categoryService;
 
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
     @PostMapping
     public Result<String> save(@RequestBody DishDto dishDto){
 
         dishService.saveWithFlavor(dishDto);
+        String key = "dish_" + dishDto.getCategoryId() + "_1";
+        stringRedisTemplate.delete(key);
         return Result.success("新增菜品成功！");
     }
 
@@ -95,13 +106,15 @@ public class DishController {
     @PutMapping
     public Result<String> updateDish(@RequestBody DishDto dishDto){
         dishService.updateWithFlavor(dishDto);
+        String key = "dish_" + dishDto.getCategoryId() + "_1";
+        stringRedisTemplate.delete(key);
         return Result.success("修改成功！");
     }
 
     /**
-     * 当前商品为启售状态，其status为1，但点击停售按钮时，发送的status为0，
-     * 前端是直接对这个status取反了，直接用发送的这个status来更新我们的商品状态就好了，
-     * 不用在后端再次进行判断
+     * 这里并不需要我们对删除操作也进行缓存清理，因为删除操作执行之前，必须先将菜品状态修改为停售，
+     * 而停售状态也会帮我们清理缓存，同时也看不到菜品，随后将菜品删除，仍然看不到菜品，
+     * 故删除操作不需要进行缓存清理
      * @param status
      * @param ids
      * @return
@@ -111,32 +124,37 @@ public class DishController {
         LambdaUpdateWrapper<Dish> updateWrapper = new LambdaUpdateWrapper<>();
         updateWrapper.in(ids != null, Dish::getId, ids);
         updateWrapper.set(Dish::getStatus, status);
+        LambdaQueryWrapper<Dish> lambdaQueryWrapper = new LambdaQueryWrapper<>();
+        lambdaQueryWrapper.in(Dish::getId, ids);
+        List<Dish> dishes = dishService.list(lambdaQueryWrapper);
+        for (Dish dish : dishes) {
+            String key = "dish_" + dish.getCategoryId() + "_1";
+            stringRedisTemplate.delete(key);
+        }
         dishService.update(updateWrapper);
         return Result.success("批量操作成功");
     }
 
 
     /***
-     * 这里是逻辑删除，不是真删，把isDeleted字段更新为1就不显示了，间接完成了逻辑删除
+     * （这里是逻辑删除，不是真删，把isDeleted字段更新为1就不显示了，间接完成了逻辑删除）没实现
+     * 直接删除
      * 用list接收要加 @RequestParam 注解
      * 批量删除
      * @param ids
      * @return
      */
     @DeleteMapping
-    public Result<String> delete(Long[] ids){
-        List<Dish> dishes = new ArrayList<>();
-        for (Long id : ids) {
-            Dish dish = dishService.getById(id);
-            if(dish.getStatus() == 1){
-                return Result.error("请先停售");
-            }
-            dish.setIsDeleted(1);
-            dishes.add(dish);
+    public Result<String> delete(@RequestParam List<Long> ids) {
+        LambdaQueryWrapper<Dish> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.in(Dish::getId, ids);
+        queryWrapper.eq(Dish::getStatus, 1);
+        int count = dishService.count(queryWrapper);
+        if (count > 0) {
+            throw new CustomException("删除列表中存在启售状态商品，无法删除");
         }
-        dishService.updateBatchById(dishes);
+        dishService.removeByIds(ids);
         return Result.success("删除成功");
-
     }
 
     /**
@@ -146,12 +164,22 @@ public class DishController {
      */
     @GetMapping("/list")
     public Result<List<DishDto>> list(Dish dish){
+        List<DishDto> dishDtoList;
+        String key = "dish_" + dish.getCategoryId() + "_" + dish.getStatus();
+        //用 json 将存入 redis 中 json字符串 转换为 list 集合
+        dishDtoList = JSON.parseObject(stringRedisTemplate.opsForValue().get(key), new TypeReference<List<DishDto>>(){});
+        //如果有，则直接返回
+        if (dishDtoList != null){
+            return Result.success(dishDtoList);
+        }
+
+        //如果无，则查询
         LambdaQueryWrapper<Dish> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(dish.getCategoryId() != null, Dish::getCategoryId, dish.getCategoryId());
         wrapper.eq(Dish::getStatus, 1);
         wrapper.orderByAsc(Dish::getSort).orderByDesc(Dish::getUpdateTime);
         List<Dish> list = dishService.list(wrapper);
-        List<DishDto> dishDto = list.stream().map((item) -> {
+        dishDtoList = list.stream().map((item) -> {
             //创建一个dishDto对象
             DishDto dto = new DishDto();
             //将item的属性全都copy到dishDto里
@@ -177,7 +205,14 @@ public class DishController {
             //并将dishDto作为结果返回
             return dto;
         }).collect(Collectors.toList());
+        log.info("listDto >> {}", dishDtoList);
 
-        return Result.success(dishDto);
+        //如果value需要存对象，可以将对象转换成json字符串存入。
+        //将 dishDtoList 用 json 转换为 json字符串 存入redis
+        String dishDtoListStr = JSON.toJSONString(dishDtoList);
+        //将查询的结果让Redis缓存，设置存活时间为60分钟
+        stringRedisTemplate.opsForValue().set(key, dishDtoListStr, 60, TimeUnit.MINUTES);
+
+        return Result.success(dishDtoList);
     }
 }
