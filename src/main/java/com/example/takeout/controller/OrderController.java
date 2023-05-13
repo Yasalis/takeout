@@ -147,7 +147,7 @@ public class OrderController {
         }).collect(Collectors.toList());
         //加入购物车
         shoppingCartService.saveBatch(shoppingCarts);
-        return Result.success("喜欢吃就再来一单吖~");
+        return Result.success("欢迎回购");
     }
 
     /**
