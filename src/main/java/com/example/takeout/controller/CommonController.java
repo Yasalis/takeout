@@ -1,7 +1,6 @@
 package com.example.takeout.controller;
 
 import com.example.takeout.common.Result;
-import com.sun.deploy.net.HttpResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
