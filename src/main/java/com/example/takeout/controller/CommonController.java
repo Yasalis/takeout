@@ -21,7 +21,7 @@ import java.util.UUID;
 @RequestMapping("/common")
 public class CommonController {
 
-    @Value("${reggie.path}")
+    @Value("${takeout.path}")
     private String basePath;
 
     @PostMapping("/upload")

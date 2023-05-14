@@ -16,6 +16,7 @@ import com.example.takeout.service.DishFlavorService;
 import com.example.takeout.service.DishService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
@@ -41,6 +42,8 @@ public class DishController {
     private StringRedisTemplate stringRedisTemplate;
 
     @PostMapping
+    //设置allEntries为true，清空缓存名称为setmealCache的所有缓存
+    @CacheEvict(value = "setmealCache", allEntries = true)
     public Result<String> save(@RequestBody DishDto dishDto){
 
         dishService.saveWithFlavor(dishDto);
