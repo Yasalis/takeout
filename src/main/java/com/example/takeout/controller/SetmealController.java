@@ -14,14 +14,12 @@ import com.example.takeout.service.CategoryService;
 import com.example.takeout.service.DishService;
 import com.example.takeout.service.SetmealDishService;
 import com.example.takeout.service.SetmealService;
-import org.apache.ibatis.annotations.Delete;
 import org.springframework.beans.BeanUtils;
-import org.springframework.stereotype.Controller;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -73,6 +71,12 @@ public class SetmealController {
         return Result.success(dtoPage);
     }
 
+    /**
+     * 删除前要先执行 停售 操作，要改变 status
+     * 改变 status 的时候就已经把缓存清空了
+     * @param ids
+     * @return
+     */
     @DeleteMapping
     public Result<String> delete(List<Long> ids){
         setmealService.removeWithDish(ids);
@@ -81,10 +85,12 @@ public class SetmealController {
 
     /**
      * 这俩都是更新状态操作，一个启售一个停售
+     * 设置allEntries为true，清空缓存名称为setmealCache的所有缓存
      * @param ids
      * @return
      */
     @PostMapping("/status/{status}")
+    @CacheEvict(value = "setmealCache", allEntries = true)
     public Result<String> status(@PathVariable String status, @RequestParam List<Long> ids) {
         LambdaUpdateWrapper<Setmeal> updateWrapper = new LambdaUpdateWrapper<>();
         updateWrapper.in(Setmeal::getId, ids);
@@ -93,7 +99,15 @@ public class SetmealController {
         return Result.success("批量操作成功");
     }
 
+    /**
+     * 在方法执行前，Spring先查看缓存中是否有数据；
+     * 如果有数据，则直接返回缓存数据；
+     * 若没有数据，调用方法并将方法返回值放到缓存中
+     * @param setmeal
+     * @return
+     */
     @GetMapping("/list")
+    @Cacheable(value = "setmealCache", key = "#setmeal.categoryId + '_' + #setmeal.status")
     public Result<List<Setmeal>> list(Setmeal setmeal) {
         //条件构造器
         LambdaQueryWrapper<Setmeal> queryWrapper = new LambdaQueryWrapper<>();
@@ -154,9 +168,11 @@ public class SetmealController {
 
     /**
      * 套餐修改
+     * 设置allEntries为true，清空缓存名称为setmealCache的所有缓存
      * @param setmealDto
      * @return
      */
+    @CacheEvict(value = "setmealCache", allEntries = true)
     @PutMapping
     public Result<Setmeal> updateWithDish(@RequestBody SetmealDto setmealDto) {
         List<SetmealDish> setmealDishes = setmealDto.getSetmealDishes();
