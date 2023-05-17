@@ -191,7 +191,7 @@
 
 .logo {
   text-align: center;
-  background-color: rgb(52, 55, 68);
+  background-color: rgb(174 188 255 / 26%);
   /* height: 100px;
   line-height: 100px;
   padding: 12px 5px; */
@@ -240,22 +240,22 @@
 }
 .el-menu .el-menu-item:hover {
   color: #ffffff !important;
-  background-color: transparent !important;
+  background-color: #95d7ff !important;
 }
 .el-menu .el-menu-item:hover span {
-  color: #ffffff !important;
+  color: #333333 !important;
 }
 
 .el-menu .el-menu-item:active {
   color: #333333 !important;
-  background-color: transparent !important;
+  background-color: #4071ff !important;
 }
 .el-menu .el-menu-item:active span {
   color: #333333 !important;
 }
 
 .el-menu .el-menu-item.is-active {
-  background-color: #ffc200 !important;
+  background-color: #94b6ff !important;
   color: #333333 !important;
   border-radius: 0 21px 21px 0 !important;
 }
