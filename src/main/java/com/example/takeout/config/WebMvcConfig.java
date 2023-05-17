@@ -1,7 +1,6 @@
 package com.example.takeout.config;
 
 import com.example.takeout.common.JacksonObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.github.xiaoymin.knife4j.spring.annotations.EnableKnife4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
