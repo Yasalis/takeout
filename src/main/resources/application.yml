@@ -11,13 +11,13 @@ spring:
       master:
         type: com.alibaba.druid.pool.DruidDataSource
         driver-class-name: com.mysql.cj.jdbc.Driver
-        url: jdbc:mysql://192.168.119.133:3306/reggie?serverTimezone=UTC&useSSL=false&characterEncoding=utf-8
+        url: jdbc:mysql://192.168.119.133:3306/reggie?useUnicode=true&characterEncoding=utf8&autoReconnect=true&useSSL=false&serverTimezone=GMT
         username: root
         password: Root@123
       slave:
         type: com.alibaba.druid.pool.DruidDataSource
         driver-class-name: com.mysql.cj.jdbc.Driver
-        url: jdbc:mysql://192.168.119.134:3306/reggie?serverTimezone=UTC&useSSL=false&characterEncoding=utf-8
+        url: jdbc:mysql://192.168.119.134:3306/reggie?useUnicode=true&characterEncoding=utf8&autoReconnect=true&useSSL=false&serverTimezone=GMT
         username: root
         password: Root@123
     masterslave:
